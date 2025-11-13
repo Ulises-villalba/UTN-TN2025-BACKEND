@@ -9,8 +9,6 @@ class AuthService {
     static async register(username, password, email) {
 
         //Verificar que el usuario no este repido
-        //  - .getByEmail en UserRepository
-
         const user_found = await UserRepository.getByEmail(email)
         if (user_found) {
             throw new ServerError(400, 'Email ya en uso')
@@ -21,6 +19,7 @@ class AuthService {
 
         //guardarlo en la DB
         const user_created = await UserRepository.createUser(username, email, password_hashed)
+
         const verification_token = jwt.sign(
             {
                 email: email,
@@ -28,17 +27,35 @@ class AuthService {
             },
             ENVIRONMENT.JWT_SECRET_KEY
         )
-        //Enviar un mail de verificacion
+
+        //Enviar un mail de verificacion al email proporcionado
+
         await transporter.sendMail({
             from: 'u.villalba2020@gmail.com',
-            to: 'u.villalba2020@gmail.com',
+            to: email,
             subject: 'Verificacion de correo electronico',
             html: `
-            <h1>Hola desde node.js</h1>
-            <p>Este es un mail de verificacion</p>
-            <a href='http://localhost:8080/api/auth/verify-email/${verification_token}'>Verificar email</a>
+            <h1>Hola</h1>
+            <p>Prueba esta app web sencilla, tipo To Do!</p>
+
+            <a href='${ENVIRONMENT.URL_API_BACKEND}/api/auth/verify-email/${verification_token}'>Verificar email</a>
             `
         })
+
+
+        // await transporter.sendMail({
+        //     from: 'u.villalba2020@gmail.com',
+        //     to: 'u.villalba2020@gmail.com',
+        //     subject: 'Verificacion de correo electronico',
+        //     html: `
+        //     <h1>Hola</h1>
+        //     <p>Este es un mail de verificacion</p>
+        //     <a href='http://localhost:8080/api/auth/verify-email/${verification_token}'>Verificar email</a>
+        //     `
+        // })
+
+        // Devolver usuario creado (útil para tests/confirmaciones)
+        return user_created
     }
 
     static async verifyEmail(verification_token){
@@ -64,24 +81,20 @@ class AuthService {
     }
 
     static async login(email, password){
-        /* 
-        - Buscar por email y guardar en una variable
-            - No se encontro: Tiramos error 404 'Email no registrado' / 'El email o la contraseña son invalidos'
-        - Usamos bcrypt.compare para checkear que la password recibida sea igual al hash guardado en DB
-            - En caso de que no sean iguales: 401 (Unauthorized) 'Contraseña invalida' / 'El email o la contraseña son invalidos'
-        - Generar el authorization_token con los datos que coinsideremos importantes para una sesion: (name, email, rol, created_at) (NO PASAR DATOS SENSIBLES)
-        - Retornar el token
-        */
-
         const user = await UserRepository.getByEmail(email)
         if(!user){
             throw new ServerError(404, 'Email no registrado')
         }
-        /* Permite saber si cierto valor es igual a otro cierto valor encriptado */
+
+        if(user.verified_email === false){
+            throw new ServerError(401, 'Email no verificado. Revisa tu correo o solicita reenvío.')
+        }
+
         const is_same_password = await bcrypt.compare(password, user.password)
         if(!is_same_password){
             throw new ServerError(401, 'Contraseña incorrecta')
         }
+
         const authorization_token = jwt.sign(
             {
                 id: user._id,
@@ -98,7 +111,35 @@ class AuthService {
         return {
             authorization_token
         }
+    }
 
+    // Método nuevo: reenviar mail de verificación
+    static async resendVerification(email){
+        const user = await UserRepository.getByEmail(email)
+        if(!user){
+            throw new ServerError(404, 'Email no registrado')
+        }
+        if(user.verified_email === true){
+            throw new ServerError(400, 'Email ya verificado')
+        }
+
+        const verification_token = jwt.sign(
+            {
+                email: email,
+                user_id: user._id
+            },
+            ENVIRONMENT.JWT_SECRET_KEY
+        )
+
+        // await transporter.sendMail({
+        //     from: 'no-reply@tu-dominio.com',
+        //     to: email,
+        //     subject: 'Reenvío: Verificación de correo electrónico',
+        //     html: `<p>Haz click para verificar:</p>
+        //            <a href='http://localhost:8080/api/auth/verify-email/${verification_token}'>Verificar email</a>`
+        // })
+
+        return { message: 'Correo de verificación reenviado' }
     }
 }
 
