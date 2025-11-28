@@ -43,17 +43,6 @@ class AuthService {
         })
 
 
-        // await transporter.sendMail({
-        //     from: 'u.villalba2020@gmail.com',
-        //     to: 'u.villalba2020@gmail.com',
-        //     subject: 'Verificacion de correo electronico',
-        //     html: `
-        //     <h1>Hola</h1>
-        //     <p>Este es un mail de verificacion</p>
-        //     <a href='http://localhost:8080/api/auth/verify-email/${verification_token}'>Verificar email</a>
-        //     `
-        // })
-
         // Devolver usuario creado (útil para tests/confirmaciones)
         return user_created
     }
@@ -131,16 +120,19 @@ class AuthService {
             ENVIRONMENT.JWT_SECRET_KEY
         )
 
-        // await transporter.sendMail({
-        //     from: 'no-reply@tu-dominio.com',
-        //     to: email,
-        //     subject: 'Reenvío: Verificación de correo electrónico',
-        //     html: `<p>Haz click para verificar:</p>
-        //            <a href='http://localhost:8080/api/auth/verify-email/${verification_token}'>Verificar email</a>`
-        // })
+        // aquí puedes enviar el mail usando transporter si lo deseas
 
         return { message: 'Correo de verificación reenviado' }
     }
 }
 
 export default AuthService
+
+// antes:
+// <a href="/register">Crear cuenta</a>
+// <a href="/forgot-password">Olvidé mi contraseña</a>
+
+// después:
+{/* <Link to="/register">Crear cuenta</Link>
+
+<Link to="/forgot-password">Olvidé mi contraseña</Link> */}
