@@ -1,87 +1,89 @@
-import transporter from "../config/mailer.config.js"
-import UserRepository from "../repositories/user.repository.js"
-import { ServerError } from "../utils/customError.utils.js"
-import jwt from 'jsonwebtoken'
-import bcrypt from 'bcrypt'
-import ENVIRONMENT from "../config/environment.config.js"
+import UserRepository from "../repositories/user.repository.js";
+import { ServerError } from "../utils/customError.utils.js";
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import ENVIRONMENT from "../config/environment.config.js";
+import { Resend } from 'resend';
+
+// Inicializar Resend
+const resend = new Resend(ENVIRONMENT.RESEND_API_KEY);
 
 class AuthService {
+
     static async register(username, password, email) {
 
-        //Verificar que el usuario no este repido
-        const user_found = await UserRepository.getByEmail(email)
+        // 1. Verificar si el usuario existe
+        const user_found = await UserRepository.getByEmail(email);
         if (user_found) {
-            throw new ServerError(400, 'Email ya en uso')
+            throw new ServerError(400, 'Email ya en uso');
         }
 
-        //Encriptar la contraseña
-        const password_hashed = await bcrypt.hash(password, 12)
+        // 2. Hashear contraseña
+        const password_hashed = await bcrypt.hash(password, 12);
 
-        //guardarlo en la DB
-        const user_created = await UserRepository.createUser(username, email, password_hashed)
+        // 3. Guardar usuario
+        const user_created = await UserRepository.createUser(username, email, password_hashed);
 
+        // 4. Crear token de verificación
         const verification_token = jwt.sign(
             {
                 email: email,
                 user_id: user_created._id
             },
-            ENVIRONMENT.JWT_SECRET_KEY
-        )
+            ENVIRONMENT.JWT_SECRET_KEY,
+            { expiresIn: "1d" }
+        );
 
-        //Enviar un mail de verificacion al email proporcionado
+        const verification_link = `${ENVIRONMENT.URL_API_BACKEND}/api/auth/verify-email/${verification_token}`;
 
-        await transporter.sendMail({
-            from: 'u.villalba2020@gmail.com',
+        // 5. Enviar email con Resend
+        await resend.emails.send({
+            from: ENVIRONMENT.EMAIL_FROM,
             to: email,
-            subject: 'Verificacion de correo electronico',
+            subject: "Verificación de correo electrónico",
             html: `
-            <h1>Hola</h1>
-            <p>Prueba esta app web sencilla, tipo To Do!</p>
-
-            <a href='${ENVIRONMENT.URL_API_BACKEND}/api/auth/verify-email/${verification_token}'>Verificar email</a>
+                <h1>Hola ${username}</h1>
+                <p>Gracias por registrarte. Haz clic en el botón para verificar tu correo:</p>
+                <p><a href="${verification_link}" style="padding:10px 20px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;">Verificar email</a></p>
+                <p>Si no funciona, usa este enlace:</p>
+                <p>${verification_link}</p>
             `
-        })
+        });
 
-
-        // Devolver usuario creado (útil para tests/confirmaciones)
-        return user_created
+        return user_created;
     }
 
-    static async verifyEmail(verification_token){
-        try{
-            const payload = jwt.verify(verification_token, ENVIRONMENT.JWT_SECRET_KEY)
+    static async verifyEmail(verification_token) {
+        try {
+            const payload = jwt.verify(verification_token, ENVIRONMENT.JWT_SECRET_KEY);
 
-            await UserRepository.updateById(
-                payload.user_id, 
-                {
-                    verified_email: true
-                }
-            )
+            await UserRepository.updateById(payload.user_id, {
+                verified_email: true
+            });
 
-            return 
-
+            return;
         }
-        catch(error){
-            if(error instanceof jwt.JsonWebTokenError){
-                throw new  ServerError(400, 'Token invalido')
+        catch (error) {
+            if (error instanceof jwt.JsonWebTokenError) {
+                throw new ServerError(400, 'Token invalido');
             }
-            throw error
+            throw error;
         }
     }
 
-    static async login(email, password){
-        const user = await UserRepository.getByEmail(email)
-        if(!user){
-            throw new ServerError(404, 'Email no registrado')
+    static async login(email, password) {
+        const user = await UserRepository.getByEmail(email);
+        if (!user) {
+            throw new ServerError(404, 'Email no registrado');
         }
 
-        if(user.verified_email === false){
-            throw new ServerError(401, 'Email no verificado. Revisa tu correo o solicita reenvío.')
+        if (!user.verified_email) {
+            throw new ServerError(401, 'Email no verificado. Revisa tu correo o solicita reenvío.');
         }
 
-        const is_same_password = await bcrypt.compare(password, user.password)
-        if(!is_same_password){
-            throw new ServerError(401, 'Contraseña incorrecta')
+        const is_same_password = await bcrypt.compare(password, user.password);
+        if (!is_same_password) {
+            throw new ServerError(401, 'Contraseña incorrecta');
         }
 
         const authorization_token = jwt.sign(
@@ -92,47 +94,46 @@ class AuthService {
                 created_at: user.created_at
             },
             ENVIRONMENT.JWT_SECRET_KEY,
-            {
-                expiresIn: '7d'
-            }
-        )
+            { expiresIn: "7d" }
+        );
 
-        return {
-            authorization_token
-        }
+        return { authorization_token };
     }
 
-    // Método nuevo: reenviar mail de verificación
-    static async resendVerification(email){
-        const user = await UserRepository.getByEmail(email)
-        if(!user){
-            throw new ServerError(404, 'Email no registrado')
+    static async resendVerification(email) {
+        const user = await UserRepository.getByEmail(email);
+
+        if (!user) {
+            throw new ServerError(404, 'Email no registrado');
         }
-        if(user.verified_email === true){
-            throw new ServerError(400, 'Email ya verificado')
+        if (user.verified_email) {
+            throw new ServerError(400, 'Email ya verificado');
         }
 
-        const verification_token = jwt.sign(
+        const token = jwt.sign(
             {
-                email: email,
+                email: user.email,
                 user_id: user._id
             },
-            ENVIRONMENT.JWT_SECRET_KEY
-        )
+            ENVIRONMENT.JWT_SECRET_KEY,
+            { expiresIn: "1d" }
+        );
 
-        // aquí puedes enviar el mail usando transporter si lo deseas
+        const verification_link = `${ENVIRONMENT.URL_API_BACKEND}/api/auth/verify-email/${token}`;
 
-        return { message: 'Correo de verificación reenviado' }
+        await resend.emails.send({
+            from: ENVIRONMENT.EMAIL_FROM,
+            to: email,
+            subject: "Reenvío de verificación de correo",
+            html: `
+                <h1>Verifica tu correo</h1>
+                <p>Haz clic aquí para verificarlo:</p>
+                <a href="${verification_link}">Verificar email</a>
+            `
+        });
+
+        return { message: "Correo de verificación reenviado" };
     }
 }
 
-export default AuthService
-
-// antes:
-// <a href="/register">Crear cuenta</a>
-// <a href="/forgot-password">Olvidé mi contraseña</a>
-
-// después:
-{/* <Link to="/register">Crear cuenta</Link>
-
-<Link to="/forgot-password">Olvidé mi contraseña</Link> */}
+export default AuthService;

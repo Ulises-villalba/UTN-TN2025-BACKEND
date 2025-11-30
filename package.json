@@ -2,7 +2,6 @@
   "name": "clase-11-nodejs",
   "version": "1.0.0",
   "main": "src/server.js",
-
   "scripts": {
     "start": "node ./src/server.js",
     "dev": "node --watch ./src/server.js",
@@ -21,6 +20,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
     "mysql2": "^3.15.2",
-    "nodemailer": "^7.0.6"
+    "nodemailer": "^7.0.6",
+    "resend": "^6.5.2"
   }
 }
