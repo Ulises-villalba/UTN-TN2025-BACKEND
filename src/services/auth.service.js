@@ -34,21 +34,30 @@ class AuthService {
             { expiresIn: "1d" }
         );
 
-        const verification_link = `${ENVIRONMENT.URL_API_BACKEND}/api/auth/verify-email/${verification_token}`;
+        // 5. Generar link de verificación apuntando al frontend
+        const verification_link = `${ENVIRONMENT.URL_FRONTEND}/verify-email?token=${verification_token}`;
 
-        // 5. Enviar email con Resend
-        await resend.emails.send({
-            from: ENVIRONMENT.EMAIL_FROM,
-            to: email,
-            subject: "Verificación de correo electrónico",
-            html: `
-                <h1>Hola ${username}</h1>
-                <p>Gracias por registrarte. Haz clic en el botón para verificar tu correo:</p>
-                <p><a href="${verification_link}" style="padding:10px 20px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;">Verificar email</a></p>
-                <p>Si no funciona, usa este enlace:</p>
-                <p>${verification_link}</p>
-            `
-        });
+        // 6. Enviar email con Resend con manejo de errores y logs
+        try {
+            const result = await resend.emails.send({
+                from: `"Mi App" <${ENVIRONMENT.EMAIL_FROM}>`,
+                to: email,
+                subject: "Verificación de correo electrónico",
+                html: `
+                    <h1>Hola ${username}</h1>
+                    <p>Gracias por registrarte. Haz clic en el botón para verificar tu correo:</p>
+                    <p><a href="${verification_link}" style="padding:10px 20px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;">Verificar email</a></p>
+                    <p>Si no funciona, usa este enlace:</p>
+                    <p>${verification_link}</p>
+                `
+            });
+            console.log("Correo de verificación enviado a", email);
+            console.log("Resultado Resend:", result);
+        } catch (err) {
+            console.error("Error enviando correo de verificación:", err);
+            if (err.response) console.error("Detalles del error Resend:", err.response);
+            throw new ServerError(500, "No se pudo enviar el correo de verificación");
+        }
 
         return user_created;
     }
@@ -119,18 +128,28 @@ class AuthService {
             { expiresIn: "1d" }
         );
 
-        const verification_link = `${ENVIRONMENT.URL_API_BACKEND}/api/auth/verify-email/${token}`;
+        const verification_link = `${ENVIRONMENT.URL_FRONTEND}/verify-email?token=${token}`;
 
-        await resend.emails.send({
-            from: ENVIRONMENT.EMAIL_FROM,
-            to: email,
-            subject: "Reenvío de verificación de correo",
-            html: `
-                <h1>Verifica tu correo</h1>
-                <p>Haz clic aquí para verificarlo:</p>
-                <a href="${verification_link}">Verificar email</a>
-            `
-        });
+        try {
+            const result = await resend.emails.send({
+                from: `"Mi App" <${ENVIRONMENT.EMAIL_FROM}>`,
+                to: email,
+                subject: "Reenvío de verificación de correo",
+                html: `
+                    <h1>Verifica tu correo</h1>
+                    <p>Haz clic aquí para verificarlo:</p>
+                    <a href="${verification_link}" style="padding:10px 20px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;">Verificar email</a>
+                    <p>Si no funciona, usa este enlace:</p>
+                    <p>${verification_link}</p>
+                `
+            });
+            console.log("Correo de verificación reenviado a", email);
+            console.log("Resultado Resend:", result);
+        } catch (err) {
+            console.error("Error reenviando correo de verificación:", err);
+            if (err.response) console.error("Detalles del error Resend:", err.response);
+            throw new ServerError(500, "No se pudo reenviar el correo de verificación");
+        }
 
         return { message: "Correo de verificación reenviado" };
     }
