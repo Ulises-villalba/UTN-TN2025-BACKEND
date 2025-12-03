@@ -1,13 +1,12 @@
 import UserRepository from "../repositories/user.repository.js";
 import { ServerError } from "../utils/customError.utils.js";
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import ENVIRONMENT from "../config/environment.config.js";
 import { sendEmail } from "../config/mailer.config.js";
 
 class AuthService {
 
-    // Envío centralizado del email
     static async _sendVerificationEmail(username, email, user_id) {
 
         const token = jwt.sign(
@@ -16,34 +15,30 @@ class AuthService {
             { expiresIn: "1d" }
         );
 
-        const verification_link = `${ENVIRONMENT.URL_FRONTEND}/verify-email?token=${token}`;
+        const link = `${ENVIRONMENT.URL_FRONTEND}/verify-email?token=${token}`;
 
         const html = `
             <h1>Hola ${username}</h1>
             <p>Haz clic para verificar tu correo:</p>
-            <a href="${verification_link}" style="padding:10px 20px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;">Verificar email</a>
+            <a href="${link}" style="padding:10px 20px;background:#4CAF50;color:#fff;border-radius:4px;text-decoration:none;">Verificar email</a>
             <p>O copia este enlace:</p>
-            <p>${verification_link}</p>
+            <p>${link}</p>
         `;
 
-        await sendEmail({
+        return await sendEmail({
             to: email,
             subject: "Verificación de correo electrónico",
             html
         });
-
-        return { message: "Email enviado" };
     }
 
-    // REGISTER
     static async register(username, password, email) {
 
         const existing = await UserRepository.getByEmail(email);
 
         if (existing) {
-
             if (!existing.verified_email) {
-                console.log("📬 Usuario existente sin verificar → reenviando email");
+                console.log("📬 Usuario ya existe sin verificar → reenviando email…");
                 return await AuthService._sendVerificationEmail(
                     existing.username,
                     existing.email,
@@ -55,7 +50,6 @@ class AuthService {
         }
 
         const hashed = await bcrypt.hash(password, 12);
-
         const user = await UserRepository.createUser(username, email, hashed);
 
         await AuthService._sendVerificationEmail(username, email, user._id);
@@ -63,7 +57,6 @@ class AuthService {
         return user;
     }
 
-    // VERIFY
     static async verifyEmail(token) {
         try {
             const payload = jwt.verify(token, ENVIRONMENT.JWT_SECRET_KEY);
@@ -73,16 +66,13 @@ class AuthService {
             });
 
         } catch (err) {
-
             if (err instanceof jwt.JsonWebTokenError) {
                 throw new ServerError(400, "Token inválido");
             }
-
             throw err;
         }
     }
 
-    // LOGIN
     static async login(email, password) {
 
         const user = await UserRepository.getByEmail(email);
@@ -103,7 +93,6 @@ class AuthService {
         return { authorization_token: token };
     }
 
-    // REENVIAR VERIFICACIÓN
     static async resendVerification(email) {
 
         const user = await UserRepository.getByEmail(email);
